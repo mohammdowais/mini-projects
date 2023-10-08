@@ -11,9 +11,7 @@ def manage_finances():
     ...
 
 def show_menu():
-    
     view_transactions()
-
     options = Table("Key","Options",title="Your options",box= box.ROUNDED)
     options.add_row("a","Add Transaction")
     options.add_row("v","View more transactions")
@@ -67,5 +65,4 @@ def view_labels():
     ...
     
 if __name__ == "__main__":
-    add_transaction()
     manage_finances()
