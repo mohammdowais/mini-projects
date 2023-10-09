@@ -2,7 +2,7 @@ import random,os, sys, getpass, pymongo
 from rich.console import Console
 from rich.table import Column,Table,box
 from datetime import datetime
-
+import re
 myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 
 db = myclient["budgetdb"]
@@ -10,8 +10,6 @@ USERS = db["user"]
 TRANSACTIONS = db["transactions"]
 LABELS = db["labels"]
 console = Console()
-
-print(db.list_collection_names())
 
 def main():
     if check_login():
@@ -138,7 +136,7 @@ def add_transaction():
         'Amount':amount,
         'Label':label,
         'Type':type,
-        'Date':datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'Date':datetime.now().strftime("%Y-%m-%d"),
         'to_or_from':from_or_to
     }
     x  = TRANSACTIONS.insert_one(transaction)
@@ -146,30 +144,51 @@ def add_transaction():
     view_transactions(10)
 
     
-    ...
 
-def view_transactions(limit=None):
+def view_transactions(limit=None,data=None):
     clear()
-    print(limit)
     transaction_table_view = Table("Amount","Label","Type","Date","Made to",title="Your Payments History",box= box.ROUNDED)
-    if not limit:
-        data = TRANSACTIONS.find()
-    else:
-        data = TRANSACTIONS.find().limit(limit)
+    if not data:
+        if not limit:
+            data = TRANSACTIONS.find()
+        else:
+            data = TRANSACTIONS.find().limit(limit)
     for row in data:
         transaction_table_view.add_row(str(row["Amount"]),row["Label"],row["Type"],row["Date"],row["to_or_from"])    
     console.print(transaction_table_view)
+    if len(data) == 0:
+        print("No Transaction available")
     show_transaction_menu()
 
 def view_more_transactions():
-    options = Table("key","Option",box = box.ROUNDED)
-    options.add_row("d","Search By Date")
-    options.add_row("d","Search By Date")
-    first_transaction = TRANSACTIONS.find().sort("Date",1).limit(1)[0]
-    last_transaction = TRANSACTIONS.find().sort("Date",-1).limit(1)[0]
-    print(first_transaction)
-    from_year = get_year()
-    month = get_month()
+    options = Table("","Amount","Label","Type","Date","Made to",title="Your Payments History",box= box.ROUNDED)
+    first_transaction = TRANSACTIONS.find_one({}, sort=[("Date", pymongo.ASCENDING)])
+    last_transaction = TRANSACTIONS.find_one({}, sort=[("Date", pymongo.DESCENDING)])
+    
+    options.add_row("Oldest Transaction",str(first_transaction["Amount"]),first_transaction["Label"],first_transaction["Type"],first_transaction["Date"],first_transaction["to_or_from"])
+    options.add_row("Latest Transaction",str(last_transaction["Amount"]),last_transaction["Label"],last_transaction["Type"],last_transaction["Date"],last_transaction["to_or_from"])
+    console.print(options)
+    first_date = first_transaction["Date"]
+    last_date = last_transaction["Date"]
+    from_date = get_date("Start",first_date,last_date)
+    to_date = get_date("To",first_date,last_date)
+
+    if from_date > to_date:
+        from_date, to_date  = to_date, from_date
+
+    query = {"Date": {"$gte": from_date, "$lte": to_date}}
+    results = TRANSACTIONS.find(query)
+    
+    # transaction_table_view = Table("Amount","Label","Type","Date","Made to",title=f"Transaction from {from_date} to {to_date}",box= box.ROUNDED)
+    
+    # for row in results:        
+    #     transaction_table_view.add_row(str(row["Amount"]),row["Label"],row["Type"],row["Date"],row["to_or_from"]) 
+    # print()
+    # console.print(transaction_table_view)
+    # if len(list(results)) == 0:
+    #     print("No Transaction available")
+    view_transactions(None,list(results))  
+    quit()
 
 
 def get_month():
@@ -198,8 +217,23 @@ def get_month():
         break
     return month
 
-def get_year():
-    year = input("Enter Year (yyyy):")
+def get_date(type,f_date,l_date):
+    
+    f_date = datetime.strptime(f_date,"%Y-%m-%d")
+    l_date = datetime.strptime(l_date,"%Y-%m-%d")
+    while True:
+        date = input(f"Enter {type} Date (yyyy-mm-dd):")
+        date_pattern = r'\d{4}-\d{2}-\d{2}'        
+        if re.match(date_pattern, date):
+            if not isinstance(date, datetime):   
+                date   = datetime.strptime(date,"%Y-%m-%d")
+            if date < f_date:
+                print("\nEnter a date after the oldest transaction")
+            else:
+                return date.strftime("%Y-%m-%d")
+        else:
+            print(f"\nInvalid date\nValid format:(yyyy-mm-dd)\nExample: 2023-05-01\n")
+    
 
 def view_labels():
     labels = LABELS.find()
@@ -222,5 +256,5 @@ def quit():
 if __name__ == "__main__":
     # add_transaction()
     view_more_transactions()
-    show_menu()
+    # show_menu()
     # main()
