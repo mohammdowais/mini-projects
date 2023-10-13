@@ -115,7 +115,7 @@ def show_transaction_menu():
     if choice == 'v':
         view_more_transactions()
     if choice == 'h':
-        return 0 
+        show_menu() 
 
 def add_transaction():
     view_labels()
@@ -126,12 +126,11 @@ def add_transaction():
         except ValueError:
             print("Amount should be a number")
             continue
-        label = input("Select or create a label (purpose): ").lower().title()
+        label = add_label()
         type = "Credit" if input("\n1.'c' for Credit (recived)\n2.'d' debit (spent)\n\nEnter a choice: ") == 'c' else "Debit"
         from_or_to = input("\nPayment made to / Received from: ")
         break
     print(LABELS.find())
-    add_label(label)
     transaction = {
         'Amount':amount,
         'Label':label,
@@ -156,12 +155,12 @@ def view_transactions(limit=None,data=None):
     for row in data:
         transaction_table_view.add_row(str(row["Amount"]),row["Label"],row["Type"],row["Date"],row["to_or_from"])    
     console.print(transaction_table_view)
-    if len(data) == 0:
+    if not data:
         print("No Transaction available")
     show_transaction_menu()
 
 def view_more_transactions():
-    options = Table("","Amount","Label","Type","Date","Made to",title="Your Payments History",box= box.ROUNDED)
+    options = Table("","Amount","Label","Type","Date","Made to",title="Oldest and latest Transactions",box= box.ROUNDED)
     first_transaction = TRANSACTIONS.find_one({}, sort=[("Date", pymongo.ASCENDING)])
     last_transaction = TRANSACTIONS.find_one({}, sort=[("Date", pymongo.DESCENDING)])
     
@@ -179,16 +178,7 @@ def view_more_transactions():
     query = {"Date": {"$gte": from_date, "$lte": to_date}}
     results = TRANSACTIONS.find(query)
     
-    # transaction_table_view = Table("Amount","Label","Type","Date","Made to",title=f"Transaction from {from_date} to {to_date}",box= box.ROUNDED)
-    
-    # for row in results:        
-    #     transaction_table_view.add_row(str(row["Amount"]),row["Label"],row["Type"],row["Date"],row["to_or_from"]) 
-    # print()
-    # console.print(transaction_table_view)
-    # if len(list(results)) == 0:
-    #     print("No Transaction available")
-    view_transactions(None,list(results))  
-    quit()
+    view_transactions(None,[x for x in results])  
 
 
 def get_month():
@@ -240,12 +230,41 @@ def view_labels():
 
     label_table_view = Table("Label Name",title="Labels",box = box.ROUNDED)
     for label in labels:
-        label_table_view.add_row(label["label"])
+        label_table_view.add_row(label["name"])
+    console.print(label_table_view,end="")
     console.print(label_table_view)
 
-def add_label(label):
-    LABELS.insert_one({"label":label})
+def add_label():
+    label = input("Select or create a label (purpose): ").lower().title()
+    result = LABELS.update_one({"name":label}, {"$set": {"name":label}}, upsert=True)
+
+    return label
     
+def view_transaction_by_label(from_date=None,to_date=None):
+    if from_date is None:
+        to_date = datetime.now()
+        from_date = to_date.replace(day=1)
+    
+    print(from_date,to_date)
+    dict_labels = {}
+    from_date = datetime.strptime(input(),"%Y-%m-%d")
+    to_date = datetime.strptime(input(),"%Y-%m-%d")
+    labels = LABELS.find({})
+    labels_names = [x['name'] for x in labels]
+    for name in labels_names:
+        query = {"Label":name,"Date": {"$gte": from_date, "$lte": to_date}}
+        amounts =[int(x['Amount']) for x in TRANSACTIONS.find(query)]
+        dict_labels[name] = sum(amounts)
+
+    # printing labels table
+    labels_table = Table("Bill")
+    amounts = ["Amount"]
+    for label,amount in dict_labels.items():
+        labels_table.add_column(label)
+        amounts.append(str(amount))
+    labels_table.add_row(*amounts)
+    console.print(labels_table)
+    print()
 
 def clear():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -255,6 +274,10 @@ def quit():
 
 if __name__ == "__main__":
     # add_transaction()
-    view_more_transactions()
+    # view_more_transactions()
+    # view_transactions()
     # show_menu()
+    # print(add_label())
+    # view_labels()
+    view_transaction_by_label()
     # main()
